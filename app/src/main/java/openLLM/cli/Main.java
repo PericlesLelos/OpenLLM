@@ -1,4 +1,4 @@
-package openLLM.cli;
+package openllm.cli;
 
 public class Main {
     public String getGreeting() {

@@ -9,3 +9,6 @@ build
 
 # Ignore model packages
 models/
+
+# Ignore project binaries
+bin/

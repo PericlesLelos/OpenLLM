@@ -31,7 +31,7 @@ java {
 
 application {
     // Define the main class for the application.
-    mainClass = "openLLM.cli.Main"
+    mainClass = "openllm.cli.Main"
 }
 
 tasks.named<Test>("test") {
