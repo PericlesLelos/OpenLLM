@@ -20,6 +20,8 @@ dependencies {
     testImplementation(libs.junit.jupiter)
 
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+    implementation(libs.gson)
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
@@ -37,4 +39,6 @@ application {
 tasks.named<Test>("test") {
     // Use JUnit Platform for unit tests.
     useJUnitPlatform()
+    // Gradle gives test JVMs 512 MB by default; the full GPT-2 weights alone are ~500 MB.
+    maxHeapSize = "2g"
 }
