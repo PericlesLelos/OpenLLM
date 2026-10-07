@@ -1,6 +1,8 @@
 package openllm.tokenizer;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -36,10 +38,21 @@ public class Gpt2Tokenizer {
         return out;
     }
 
-    public String idToToken(Integer id) {
+    public String idToToken(int id) {
         String out = idToToken.get(id);
         if(out == null) { throw new IllegalArgumentException("Unknown id: " + id); }
         return out;
+    }
+
+    public String decode(int[] ids) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        for (int id : ids) {
+            String token = idToToken(id);
+            for (char c : token.toCharArray()) {
+                out.write(CHAR_TO_BYTE.get(c));
+            }            
+        }
+        return out.toString(StandardCharsets.UTF_8);
     }
     
     static char[] buildByteToChar() {
@@ -61,6 +74,7 @@ public class Gpt2Tokenizer {
         }
         return table;
     }
+    
     static Map<Character, Integer> buildCharToByte(char[] table) {
         Map<Character, Integer> map = new HashMap<>();
         for (int i = 0; i < 256; i++) {

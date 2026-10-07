@@ -75,4 +75,18 @@ public class Gpt2TokenizerTest {
         assertThrows(IllegalArgumentException.class, () -> tokenizer.tokenToId("notARealToken!!"));
         assertThrows(IllegalArgumentException.class, () -> tokenizer.idToToken(50257));
     }
+
+    @Test void decodeJoinsTokensIntoText() {
+        assertEquals("Hello world", tokenizer.decode(new int[] {15496, 995}));
+    }
+
+    @Test void decodeOfNoTokensIsEmpty() {
+        assertEquals("", tokenizer.decode(new int[] {}));
+    }
+
+    @Test void decodeRejoinsACharacterSplitAcrossTokens() {
+        // The emoji is 4 UTF-8 bytes split across all three tokens, so decode must
+        // collect all the bytes before turning them into text.
+        assertEquals(" \uD83D\uDE42", tokenizer.decode(new int[] {12520, 247, 224}));   // " 🙂"
+    }
 }
