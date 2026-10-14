@@ -7,10 +7,12 @@ public class Gpt2Model {
 
     private final Gpt2Weights weights;
     private final Backend backend;
+    private final Tensor wteT;
     
     public Gpt2Model(Gpt2Weights weights, Backend backend) {
         this.weights = weights;
         this.backend = backend;
+        this.wteT = weights.wte().transpose(0, 1).contiguous();
     }
 
     Tensor embed(int[] ids) {
@@ -43,7 +45,7 @@ public class Gpt2Model {
         out = backend.addBias(out, layer.attnQkvBias());
         int[] outShape = out.shape();
         int width = weights.config().nEmbd();
-        float[] outData = out.getData();
+        float[] outData = out.rawData();
         float[] qs = new float[outShape[0] * width];
         float[] ks = new float[outShape[0] * width];
         float[] vs = new float[outShape[0] * width];
@@ -62,7 +64,7 @@ public class Gpt2Model {
 
     Tensor columnSlice(Tensor x, int startingCol, int width) {
         x = x.contiguous();
-        float[] xData = x.getData();
+        float[] xData = x.rawData();
         int[] xShape = x.shape();
         float[] outData = new float[xShape[0] * width];
         for (int i = 0; i < xShape[0]; i++) {
@@ -102,7 +104,7 @@ public class Gpt2Model {
             Tensor maskedScores = causalMask(scores);
             Tensor softScores = backend.softmax(maskedScores);
             Tensor fullColScores = backend.matmul(softScores, vSlice);
-            float[] fullColScoresData = fullColScores.getData();
+            float[] fullColScoresData = fullColScores.rawData();
             for (int j = 0; j < xShape[0]; j++) {
                 for (int k = 0; k < headDim; k++) {
                     attentionScores[j * nEmbd + i * headDim + k] = fullColScoresData[j * headDim + k];
@@ -131,12 +133,25 @@ public class Gpt2Model {
     }
 
     public Tensor forward(int[] ids) {
+        Tensor x = hidden(ids);
+        x = backend.layerNorm(x, weights.lnFWeight(), weights.lnFBias(), 1e-5f);
+        x = backend.matmul(x, wteT);
+        return x;
+    }
+
+    private Tensor hidden(int[] ids) {
         Tensor x = embed(ids);
         for (LayerWeights layer : weights.layers()) {
             x = block(x, layer);
         }
+        return x;
+    }
+
+    public Tensor nextTokenLogits(int[] ids) {
+        Tensor x = hidden(ids);
+        x = x.row(x.shape()[0] - 1).reshape(1, weights.config().nEmbd());
         x = backend.layerNorm(x, weights.lnFWeight(), weights.lnFBias(), 1e-5f);
-        x = backend.matmul(x, weights.wte().transpose(0, 1));
+        x = backend.matmul(x, wteT);
         return x;
     }
 }

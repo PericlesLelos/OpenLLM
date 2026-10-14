@@ -24,7 +24,7 @@ public class Generator {
         boolean done = false;
         for (int i = 0; i < maxNewTokens && !done && ids.size() < 1024; i++) {
             int[] passIds = ids.stream().mapToInt(Integer::intValue).toArray();
-            Tensor logits = model.forward(passIds);
+            Tensor logits = model.nextTokenLogits(passIds);
             int bestIdx = 0;
             int[] logitsShape = logits.shape();
             int lastRow = logitsShape[0] - 1;

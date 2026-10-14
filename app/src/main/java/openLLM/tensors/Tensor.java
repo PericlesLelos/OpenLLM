@@ -66,6 +66,10 @@ public final class Tensor {
         return this.data.clone();
     }
 
+    public float[] rawData() {
+        return this.data;
+    }
+
     /**
      * Returns a copy of a range of the underlying storage array.
      *

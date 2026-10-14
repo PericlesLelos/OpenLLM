@@ -25,20 +25,19 @@ public final class CpuBackend implements Backend {
         }
         int[] t1Shape = t1.shape();
         int[] t2Shape = t2.shape();
-        float[] t1Data = t1.getData();
-        float[] t2Data = t2.getData();
+        float[] t1Data = t1.rawData();
+        float[] t2Data = t2.rawData();
         if (t1Shape[1] != t2Shape[0]) {
             throw new IllegalArgumentException("interior matrix dimensions must match for matmul");
         }
         
         float[] outData = new float[t1Shape[0] * t2Shape[1]];
         for (int i = 0; i < t1Shape[0]; i++) {
-            for(int j = 0; j < t2Shape[1]; j++) {
-                float sum = 0;
-                for (int k = 0; k < t1Shape[1]; k++) {
-                    sum += t1Data[i * t1Shape[1] + k] * t2Data[k * t2Shape[1] + j];
+            for (int k = 0; k < t1Shape[1]; k++) {
+                float a = t1Data[i * t1Shape[1] + k];
+                for (int j = 0; j < t2Shape[1]; j++) {
+                    outData[i * t2Shape[1] + j] += a * t2Data[k * t2Shape[1] + j];
                 }
-                outData[i * t2Shape[1] + j] = sum;
             }
         }
         return Tensor.of(outData, t1Shape[0], t2Shape[1]);
@@ -51,8 +50,8 @@ public final class CpuBackend implements Backend {
         }
         a = a.contiguous();
         b = b.contiguous();
-        float[] aData = a.getData();
-        float[] bData = b.getData();
+        float[] aData = a.rawData();
+        float[] bData = b.rawData();
         float[] out = new float[a.size()];
         for (int i = 0; i < a.size(); i++) {
             out[i] = aData[i] + bData[i];
@@ -66,8 +65,8 @@ public final class CpuBackend implements Backend {
             throw new IllegalArgumentException("Tensors x and bias must have ranks 2 and 1 respectively");
         }
         x = x.contiguous();
-        float[] xData = x.getData();
-        float[] biasData = bias.getData();
+        float[] xData = x.rawData();
+        float[] biasData = bias.rawData();
         float[] outData = new float[x.size()];
         int[] xShape = x.shape();
         if(xShape[1] != bias.shape()[0]) {
@@ -152,8 +151,8 @@ public final class CpuBackend implements Backend {
         }
         x = x.contiguous();
         float[] xData = x.getData();
-        float[] gammaData = gamma.getData();
-        float[] betaData = beta.getData();
+        float[] gammaData = gamma.rawData();
+        float[] betaData = beta.rawData();
         for (int i = 0; i < rows; i++) {
             float sum = 0;
             for (int j = 0; j < cols; j++) {

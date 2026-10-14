@@ -13,6 +13,7 @@ import openllm.backend.Backend;
 /** Command-line entry point. Currently a placeholder that prints a greeting. */
 public class Main {
 
+    private static final int MAX_NEW_TOKENS = 30;
     public static void main(String[] args) throws IOException{
         System.out.println("Welcome to openLLM!");
         
@@ -22,6 +23,11 @@ public class Main {
         Gpt2Tokenizer tokenizer = new Gpt2Tokenizer(Path.of("../models/gpt2/vocab.json"), Path.of("../models/gpt2/merges.txt"));
         Generator generator = new Generator(model, tokenizer);
 
-        System.out.println(generator.generate(String.join(" ", args), 30));
+        long start = System.nanoTime();
+        String output = generator.generate(String.join(" ", args), MAX_NEW_TOKENS);
+        long runtime = System.nanoTime() - start;
+        System.out.println(output);
+        System.out.println("Runtime: " + runtime / 1_000_000_000.0 + "s");
+        System.out.println("Tokens/Sec: " + MAX_NEW_TOKENS / (runtime / 1_000_000_000.0) + "t/s");
     }
 }
