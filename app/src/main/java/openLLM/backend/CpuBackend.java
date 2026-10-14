@@ -4,32 +4,44 @@ import java.util.Arrays;
 
 import openllm.tensors.Tensor;
 
+/**
+ * A straightforward single-threaded {@link Backend} written in plain Java.
+ *
+ * <p>Correctness and readability come first: loops are written out so each
+ * operation can be checked against its formula. Inputs are made contiguous
+ * before their flat arrays are read, so views (e.g. a transpose) work too.
+ */
 public final class CpuBackend implements Backend {
 
+    /** {@code sqrt(2/pi)}, the constant in the tanh approximation of GELU. */
     private static final double SQRT_2_OVER_PI = Math.sqrt(2.0 / Math.PI);
     
     @Override
     public Tensor matmul(Tensor t1, Tensor t2) {
+        t1 = t1.contiguous();
+        t2 = t2.contiguous();
         if (t1.rank() != 2 || t2.rank() != 2) {
             throw new IllegalArgumentException("Tensors must be of rank 2 to be multiplied");
         }
         int[] t1Shape = t1.shape();
         int[] t2Shape = t2.shape();
+        float[] t1Data = t1.getData();
+        float[] t2Data = t2.getData();
         if (t1Shape[1] != t2Shape[0]) {
             throw new IllegalArgumentException("interior matrix dimensions must match for matmul");
         }
         
-        Tensor out = Tensor.zeros(t1Shape[0], t2Shape[1]);
+        float[] outData = new float[t1Shape[0] * t2Shape[1]];
         for (int i = 0; i < t1Shape[0]; i++) {
             for(int j = 0; j < t2Shape[1]; j++) {
                 float sum = 0;
                 for (int k = 0; k < t1Shape[1]; k++) {
-                    sum += t1.get(i, k) * t2.get(k, j);
+                    sum += t1Data[i * t1Shape[1] + k] * t2Data[k * t2Shape[1] + j];
                 }
-                out.set(sum, i, j);
+                outData[i * t2Shape[1] + j] = sum;
             }
         }
-        return out;
+        return Tensor.of(outData, t1Shape[0], t2Shape[1]);
     }
 
     @Override

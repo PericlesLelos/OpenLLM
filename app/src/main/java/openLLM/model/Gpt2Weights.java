@@ -8,7 +8,27 @@ import openllm.tensors.Tensor;
 import openllm.io.SafetensorReader;
 import openllm.io.TensorInfo;
 
+/**
+ * All of GPT-2's learned weights, loaded from a safetensors file.
+ *
+ * @param config the model's size
+ * @param wte token embedding table, {@code [vocabSize, nEmbd]}; row {@code i} is token {@code i}'s vector
+ * @param wpe position embedding table, {@code [nCtx, nEmbd]}; row {@code t} is position {@code t}'s vector
+ * @param layers the transformer blocks, {@code nLayer} of them, in order
+ * @param lnFWeight final layer norm scale ({@code ln_f.weight}), {@code [nEmbd]}
+ * @param lnFBias final layer norm shift ({@code ln_f.bias}), {@code [nEmbd]}
+ */
 public record Gpt2Weights(Gpt2Config config, Tensor wte, Tensor wpe, LayerWeights[] layers, Tensor lnFWeight, Tensor lnFBias) {
+    /**
+     * Loads GPT-2 small from a safetensors file. The header is read once, then
+     * each tensor is loaded by its name in the file. The causal-mask buffers
+     * ({@code attn.bias}) are not needed and are skipped.
+     *
+     * @param p path to {@code model.safetensors}
+     * @return the loaded weights
+     * @throws IOException if the file can't be read
+     * @throws IllegalArgumentException if an expected tensor is missing from the file
+     */
     public static Gpt2Weights load(Path p) throws IOException {
         Map<String, TensorInfo> map = SafetensorReader.readHeader(p);
         Gpt2Config config = Gpt2Config.GPT2_SMALL;
@@ -54,6 +74,7 @@ public record Gpt2Weights(Gpt2Config config, Tensor wte, Tensor wpe, LayerWeight
         return new Gpt2Weights(config, wte, wpe, layers, lnFWeight, lnFBias);    
     }
 
+    // Looks up one tensor by name and loads it, failing clearly if the name isn't in the file.
     private static Tensor load(Path p, Map<String, TensorInfo> map, String name) throws IOException {
         TensorInfo info = map.get(name);
         if (info == null) {

@@ -19,8 +19,24 @@ import com.google.gson.JsonElement;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Reads tensors from a {@code .safetensors} file.
+ *
+ * <p>File layout: an 8-byte little-endian header length {@code N}, then
+ * {@code N} bytes of UTF-8 JSON describing each tensor (dtype, shape and
+ * byte offsets), then the raw tensor data. Offsets in the header are
+ * relative to the start of the data section, i.e. to byte {@code 8 + N}.
+ */
 public class SafetensorReader {
     
+    /**
+     * Parses the JSON header and describes every tensor in the file, without
+     * loading any tensor data. The {@code __metadata__} entry is skipped.
+     *
+     * @param p path to the {@code .safetensors} file
+     * @return a map from tensor name (e.g. {@code "h.0.attn.c_attn.weight"}) to its {@link TensorInfo}
+     * @throws IOException if the file can't be read
+     */
     public static Map<String, TensorInfo> readHeader(Path p) throws IOException {
         try (InputStream in = Files.newInputStream(p)) {
             in.skipNBytes(8);
@@ -50,6 +66,17 @@ public class SafetensorReader {
         }
     }
 
+    /**
+     * Loads one tensor's data from the file.
+     *
+     * <p>Seeks to {@code 8 + headerLength + info.start()} and reads the tensor's
+     * bytes as little-endian 32-bit floats. Only F32 data is supported.
+     *
+     * @param p path to the {@code .safetensors} file
+     * @param info the tensor's entry from {@link #readHeader(Path)}
+     * @return a new tensor with the shape given in {@code info}
+     * @throws IOException if the file can't be read or ends early
+     */
     public static Tensor loadTensor(Path p, TensorInfo info) throws IOException {
         try (FileChannel channel = FileChannel.open(p)) {
             long headerLength = readHeaderLength(p);
@@ -67,6 +94,7 @@ public class SafetensorReader {
         }
     }
 
+    // Reads the first 8 bytes of the file: the header length as a little-endian long.
     private static long readHeaderLength(Path p) throws IOException {
         try (InputStream in = Files.newInputStream(p)) {       
             byte[] headerLengthBytes =  in.readNBytes(8);
