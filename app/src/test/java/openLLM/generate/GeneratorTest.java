@@ -15,9 +15,9 @@ import openllm.tokenizer.Gpt2Tokenizer;
 
 public class GeneratorTest {
     // Gradle runs tests from the app/ folder, so the model folder is one level up.
-    private static final Path MODEL = Path.of("../models/gpt2/model.safetensors");
-    private static final Path VOCAB = Path.of("../models/gpt2/vocab.json");
-    private static final Path MERGES = Path.of("../models/gpt2/merges.txt");
+    private static final Path MODEL = Path.of("../models/gpt2-small/model.safetensors");
+    private static final Path VOCAB = Path.of("../models/gpt2-small/vocab.json");
+    private static final Path MERGES = Path.of("../models/gpt2-small/merges.txt");
 
     private static Generator generator;
 

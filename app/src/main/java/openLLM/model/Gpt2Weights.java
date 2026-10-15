@@ -30,9 +30,11 @@ public record Gpt2Weights(Gpt2Config config, Tensor wte, Tensor wpe, LayerWeight
      * @throws IllegalArgumentException if an expected tensor is missing from the file
      */
     public static Gpt2Weights load(Path p) throws IOException {
-        Map<String, TensorInfo> map = SafetensorReader.readHeader(p);
-        Gpt2Config config = Gpt2Config.GPT2_SMALL;
-        
+        return load(p, Gpt2Config.GPT2_SMALL);    
+    }
+
+    public static Gpt2Weights load(Path p, Gpt2Config config) throws IOException {
+        Map<String, TensorInfo> map = SafetensorReader.readHeader(p);        
         LayerWeights[] layers = new LayerWeights[config.nLayer()];
         Tensor wte = load(p, map, "wte.weight");
         Tensor wpe = load(p, map, "wpe.weight");
@@ -73,6 +75,7 @@ public record Gpt2Weights(Gpt2Config config, Tensor wte, Tensor wpe, LayerWeight
         }
         return new Gpt2Weights(config, wte, wpe, layers, lnFWeight, lnFBias);    
     }
+
 
     // Looks up one tensor by name and loads it, failing clearly if the name isn't in the file.
     private static Tensor load(Path p, Map<String, TensorInfo> map, String name) throws IOException {

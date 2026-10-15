@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 public class Gpt2WeightsTest {
     // Gradle runs tests from the app/ folder, so the model folder is one level up.
-    private static final Path GPT2 = Path.of("../models/gpt2/model.safetensors");
+    private static final Path GPT2 = Path.of("../models/gpt2-small/model.safetensors");
 
     // Loading reads the whole ~500 MB file, so do it once and share it across tests.
     private static Gpt2Weights weights;

@@ -12,4 +12,9 @@ package openllm.model;
 public record Gpt2Config(int nLayer, int nHead, int nEmbd, int vocabSize, int nCtx){
     /** GPT-2 small (124M parameters): 12 layers, 12 heads, width 768. */
     public static final Gpt2Config GPT2_SMALL = new Gpt2Config(12, 12, 768, 50257, 1024);
+    public static final Gpt2Config GPT2_MEDIUM = new Gpt2Config(24, 16, 1024, 50257, 1024);
+    public static final Gpt2Config GPT2_LARGE = new Gpt2Config(36, 20, 1280, 50257, 1024);
+    public static final Gpt2Config GPT2_XL = new Gpt2Config(48, 25, 1600, 50257, 1024);
+
+
 }

@@ -34,6 +34,9 @@ java {
 application {
     // Define the main class for the application.
     mainClass = "openllm.cli.Main"
+
+    // Increase max heap size for larger models
+    applicationDefaultJvmArgs = listOf("-Xmx10g")
 }
 
 tasks.named<Test>("test") {

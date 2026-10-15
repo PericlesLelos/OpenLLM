@@ -12,7 +12,7 @@ import openllm.tensors.Tensor;
 
 public class SafetensorReaderTest {
     // Gradle runs tests from the app/ folder, so the model folder is one level up.
-    private static final Path GPT2 = Path.of("../models/gpt2/model.safetensors");
+    private static final Path GPT2 = Path.of("../models/gpt2-small/model.safetensors");
 
     @Test void readHeaderFindsAllGpt2Tensors() throws IOException {
         Map<String, TensorInfo> tensors = SafetensorReader.readHeader(GPT2);

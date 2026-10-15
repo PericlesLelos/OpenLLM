@@ -13,7 +13,7 @@ import openllm.tensors.Tensor;
 
 public class Gpt2ModelTest {
     // Gradle runs tests from the app/ folder, so the model folder is one level up.
-    private static final Path GPT2 = Path.of("../models/gpt2/model.safetensors");
+    private static final Path GPT2 = Path.of("../models/gpt2-small/model.safetensors");
     private static final float TOL = 1e-5f;
 
     // Loading reads the whole ~500 MB file, so do it once and share it across tests.
