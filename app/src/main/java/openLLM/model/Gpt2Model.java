@@ -15,6 +15,10 @@ public class Gpt2Model {
         this.wteT = weights.wte().transpose(0, 1).contiguous();
     }
 
+    public Backend backend() {
+        return this.backend;
+    }
+
     Tensor embed(int[] ids) {
         return embed(ids, 0);
     }

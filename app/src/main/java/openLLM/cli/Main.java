@@ -6,6 +6,7 @@ import java.util.Arrays;
 
 import openllm.backend.CpuBackend;
 import openllm.generate.Generator;
+import openllm.generate.Sampler;
 import openllm.model.Gpt2Model;
 import openllm.model.Gpt2Weights;
 import openllm.model.GptModel;
@@ -30,8 +31,9 @@ public class Main {
         Gpt2Weights weights = Gpt2Weights.load(choice.weightsPath(), choice.config());
         Backend backend = new CpuBackend();
         Gpt2Model model = new Gpt2Model(weights, backend);
+        Sampler sampler = new Sampler(0.5f, 30, System.nanoTime(), backend);
         Gpt2Tokenizer tokenizer = new Gpt2Tokenizer(Path.of("../models/gpt2-small/vocab.json"), Path.of("../models/gpt2-small/merges.txt"));
-        Generator generator = new Generator(model, tokenizer);
+        Generator generator = new Generator(model, tokenizer, sampler);
 
         long start = System.nanoTime();
         String output = generator.generate(String.join(" ", promptArgs), MAX_NEW_TOKENS);

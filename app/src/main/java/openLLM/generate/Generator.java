@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import openllm.backend.Backend;
 import openllm.model.Gpt2Model;
 import openllm.model.KvCache;
 import openllm.tensors.Tensor;
@@ -13,10 +14,17 @@ import openllm.tokenizer.Gpt2Tokenizer;
 public class Generator {
     private Gpt2Model model;
     private Gpt2Tokenizer tokenizer;
+    private Sampler sampler;
     
-    public Generator(Gpt2Model model, Gpt2Tokenizer tokenizer) {
+    public Generator (Gpt2Model model, Gpt2Tokenizer tokenizer) {
         this.model = model;
         this.tokenizer = tokenizer;
+        this.sampler = new Sampler(0, 1, 0, model.backend());
+    }
+    public Generator(Gpt2Model model, Gpt2Tokenizer tokenizer, Sampler sampler) {
+        this.model = model;
+        this.tokenizer = tokenizer;
+        this.sampler = sampler;
     }
     
     public String generate(String prompt, int maxNewTokens) {
@@ -27,14 +35,7 @@ public class Generator {
         boolean done = false;
         for (int i = 0; i < maxNewTokens && !done && ids.size() < 1024; i++) {
             Tensor logits = model.nextTokenLogits(input, cache);
-            int bestIdx = 0;
-            int[] logitsShape = logits.shape();
-            int lastRow = logitsShape[0] - 1;
-            for (int j = 1; j < logitsShape[1]; j++) {
-                if (logits.get(lastRow, j) > logits.get(lastRow, bestIdx)) {
-                    bestIdx = j;
-                } 
-            }
+            int bestIdx = sampler.sample(logits);
             if (bestIdx == 50256) {
                 done = true;
             } else {
