@@ -1,0 +1,43 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # The tests load GPT-2 small from models/gpt2-small/, which is gitignored.
+      # Cache it so only the first run (or a cache eviction) downloads ~550 MB.
+      - name: Cache GPT-2 small
+        id: model-cache
+        uses: actions/cache@v4
+        with:
+          path: models/gpt2-small
+          key: gpt2-small-v1
+
+      - name: Download GPT-2 small
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p models/gpt2-small
+          base=https://huggingface.co/openai-community/gpt2/resolve/main
+          for f in model.safetensors vocab.json merges.txt; do
+            curl -fsSL --retry 3 -o "models/gpt2-small/$f" "$base/$f"
+          done
+
+      - name: Run tests
+        run: |
+          chmod +x gradlew
+          ./gradlew test

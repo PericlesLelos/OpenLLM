@@ -23,10 +23,9 @@ public class Generator {
         KvCache cache = model.newCache();
         List<Integer> ids = new ArrayList<Integer>();
         int[] input = tokenizer.encode(prompt);
-        ids.addAll(Arrays.stream(tokenizer.encode(prompt)).boxed().collect(Collectors.toCollection(ArrayList::new)));
+        ids.addAll(Arrays.stream(input).boxed().toList());
         boolean done = false;
         for (int i = 0; i < maxNewTokens && !done && ids.size() < 1024; i++) {
-            int[] passIds = ids.stream().mapToInt(Integer::intValue).toArray();
             Tensor logits = model.nextTokenLogits(input, cache);
             int bestIdx = 0;
             int[] logitsShape = logits.shape();
