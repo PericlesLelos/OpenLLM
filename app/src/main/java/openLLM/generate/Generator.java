@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import openllm.model.Gpt2Model;
+import openllm.model.KvCache;
 import openllm.tensors.Tensor;
 import openllm.tokenizer.Gpt2Tokenizer;
 
@@ -19,12 +20,14 @@ public class Generator {
     }
     
     public String generate(String prompt, int maxNewTokens) {
+        KvCache cache = model.newCache();
         List<Integer> ids = new ArrayList<Integer>();
+        int[] input = tokenizer.encode(prompt);
         ids.addAll(Arrays.stream(tokenizer.encode(prompt)).boxed().collect(Collectors.toCollection(ArrayList::new)));
         boolean done = false;
         for (int i = 0; i < maxNewTokens && !done && ids.size() < 1024; i++) {
             int[] passIds = ids.stream().mapToInt(Integer::intValue).toArray();
-            Tensor logits = model.nextTokenLogits(passIds);
+            Tensor logits = model.nextTokenLogits(input, cache);
             int bestIdx = 0;
             int[] logitsShape = logits.shape();
             int lastRow = logitsShape[0] - 1;
@@ -37,6 +40,7 @@ public class Generator {
                 done = true;
             } else {
                 ids.add(bestIdx);
+                input = new int[]{bestIdx};
             }
         }
         return tokenizer.decode(ids.stream().mapToInt(Integer::intValue).toArray());

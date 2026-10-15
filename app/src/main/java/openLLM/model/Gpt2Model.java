@@ -16,10 +16,14 @@ public class Gpt2Model {
     }
 
     Tensor embed(int[] ids) {
+        return embed(ids, 0);
+    }
+
+    Tensor embed(int[] ids, int startPos) {
         int numTokens = ids.length;
         int nEmbd = weights.config().nEmbd();
-        if (numTokens > weights.config().nCtx() || numTokens <= 0) {
-            throw new IllegalArgumentException("Prompt must be at most " + nEmbd + " and larger than 0");
+        if (startPos < 0 || startPos + numTokens > weights.config().nCtx() || numTokens <= 0) {
+            throw new IllegalArgumentException("Sequence must have at least 1 token and end within nCtx " + weights.config().nCtx() + " (startPos " + startPos + " + " + numTokens + " tokens)");
         }
         for (int id : ids) {
             if (id < 0 || id > weights.config().vocabSize() - 1) {
@@ -29,7 +33,7 @@ public class Gpt2Model {
         float[] out = new float[numTokens * nEmbd];
         for (int i = 0; i < numTokens; i++) {
             Tensor wteRow = weights.wte().row(ids[i]);
-            Tensor wpeRow = weights.wpe().row(i);
+            Tensor wpeRow = weights.wpe().row(startPos + i);
             float[] wteRowData = wteRow.getData();
             float[] wpeRowData = wpeRow.getData();
             for (int j = 0; j < nEmbd; j++) {
@@ -75,33 +79,50 @@ public class Gpt2Model {
         
         return Tensor.of(outData, xShape[0], width);
     }
-
-    Tensor causalMask(Tensor scores) {
+    
+    Tensor causalMask(Tensor scores, int offset) {
         float[] scoresData = scores.getData();
         int[] scoresShape = scores.shape();
         for (int i = 0; i < scoresShape[0]; i++) {
-            for (int j = i + 1; j < scoresShape[1]; j++) {
+            for (int j = i + offset + 1; j < scoresShape[1]; j++) {
                 scoresData[i * scoresShape[1] + j] = Float.NEGATIVE_INFINITY; 
             }
         }
-        return Tensor.of(scoresData, scoresShape);
+        return Tensor.of(scoresData, scoresShape);        
     }
 
+    Tensor causalMask(Tensor scores) {
+        return causalMask(scores, 0);
+    }
+
+    /**
+     * Attention over {@code x} alone, with no earlier tokens. Runs the cached version
+     * with a fresh cache sized to just these rows.
+     */
     Tensor attention(Tensor x, LayerWeights layer) {
+        return attention(x, layer, new KvCache(weights.config(), x.shape()[0]), 0);
+    }
+
+    Tensor attention(Tensor x, LayerWeights layer, KvCache cache, int layerIdx) {
+        int newRows = x.shape()[0];   
         Qkv qkv = qKVProjection(x, layer);
+        cache.append(layerIdx, qkv.k(), qkv.v());
+        int total = cache.getCount() + newRows;
+        Tensor kAll = cache.readK(layerIdx, total);
+        Tensor vAll = cache.readV(layerIdx, total);
         int nHead = weights.config().nHead();
         int nEmbd = weights.config().nEmbd();
         int headDim = nEmbd / nHead;
         float[] attentionScores = new float[x.shape()[0] * nHead * headDim]; 
         int[] xShape = x.shape();
-
+        int cached = cache.getCount();
         for (int i = 0; i < nHead; i++) {
             Tensor qSlice = columnSlice(qkv.q(), i * headDim, headDim);
-            Tensor kSliceT = columnSlice(qkv.k(), i * headDim, headDim).transpose(0, 1);
-            Tensor vSlice = columnSlice(qkv.v(), i * headDim, headDim);
+            Tensor kSliceT = columnSlice(kAll, i * headDim, headDim).transpose(0, 1);
+            Tensor vSlice = columnSlice(vAll, i * headDim, headDim);
             Tensor scores = backend.matmul(qSlice, kSliceT);
             scores = backend.scale(scores, (float) (1 / Math.sqrt(headDim)));
-            Tensor maskedScores = causalMask(scores);
+            Tensor maskedScores = causalMask(scores, cached);
             Tensor softScores = backend.softmax(maskedScores);
             Tensor fullColScores = backend.matmul(softScores, vSlice);
             float[] fullColScoresData = fullColScores.rawData();
@@ -132,6 +153,13 @@ public class Gpt2Model {
         return x;
     }
 
+    Tensor block(Tensor x, LayerWeights layer, KvCache cache, int layerIdx) {
+        Tensor xNorm1 = backend.layerNorm(x, layer.ln1Weight(), layer.ln1Bias(), 1e-5f);
+        x = backend.add(x, attention(xNorm1, layer, cache, layerIdx));
+        Tensor xNorm2 = backend.layerNorm(x, layer.ln2Weight(), layer.ln2Bias(), 1e-5f);
+        x = backend.add(x, mlp(xNorm2, layer));
+        return x;
+    }
     public Tensor forward(int[] ids) {
         Tensor x = hidden(ids);
         x = backend.layerNorm(x, weights.lnFWeight(), weights.lnFBias(), 1e-5f);
@@ -147,11 +175,34 @@ public class Gpt2Model {
         return x;
     }
 
+    private Tensor hidden(int[] ids, KvCache cache) {
+        int startPos = cache.getCount();
+        
+        Tensor x = embed(ids, startPos);
+        for (int i = 0; i < weights.config().nLayer(); i++) {
+            x = block(x, weights.layers()[i], cache, i);
+        }
+        cache.advance(ids.length);
+        return x;
+    }
+
     public Tensor nextTokenLogits(int[] ids) {
         Tensor x = hidden(ids);
         x = x.row(x.shape()[0] - 1).reshape(1, weights.config().nEmbd());
         x = backend.layerNorm(x, weights.lnFWeight(), weights.lnFBias(), 1e-5f);
         x = backend.matmul(x, wteT);
         return x;
+    }
+
+    public Tensor nextTokenLogits(int[] ids, KvCache cache) {
+        Tensor x = hidden(ids, cache);
+        x = x.row(x.shape()[0] - 1).reshape(1, weights.config().nEmbd());
+        x = backend.layerNorm(x, weights.lnFWeight(), weights.lnFBias(), 1e-5f);
+        x = backend.matmul(x, wteT);
+        return x;
+    }
+
+    public KvCache newCache() {
+        return new KvCache(weights.config());
     }
 }
