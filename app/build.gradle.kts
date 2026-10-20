@@ -40,6 +40,7 @@ application {
 
     // Increase max heap size for larger models
     applicationDefaultJvmArgs = listOf("-Xmx10g")
+    // To profile a run, add "-XX:StartFlightRecording=filename=run.jfr,settings=profile" to the list above
 }
 
 tasks.named<Test>("test") {

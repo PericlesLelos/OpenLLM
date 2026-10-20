@@ -1,6 +1,7 @@
 package openllm.backend;
 
 import java.util.Arrays;
+import java.util.stream.IntStream;
 
 import openllm.tensors.Tensor;
 
@@ -12,6 +13,8 @@ import openllm.tensors.Tensor;
  * before their flat arrays are read, so views (e.g. a transpose) work too.
  */
 public final class CpuBackend implements Backend {
+
+    private static final int CORES = Runtime.getRuntime().availableProcessors();
 
     /** {@code sqrt(2/pi)}, the constant in the tanh approximation of GELU. */
     private static final double SQRT_2_OVER_PI = Math.sqrt(2.0 / Math.PI);
@@ -31,16 +34,36 @@ public final class CpuBackend implements Backend {
             throw new IllegalArgumentException("interior matrix dimensions must match for matmul");
         }
         
-        float[] outData = new float[t1Shape[0] * t2Shape[1]];
-        for (int i = 0; i < t1Shape[0]; i++) {
-            for (int k = 0; k < t1Shape[1]; k++) {
-                float a = t1Data[i * t1Shape[1] + k];
-                for (int j = 0; j < t2Shape[1]; j++) {
-                    outData[i * t2Shape[1] + j] += a * t2Data[k * t2Shape[1] + j];
+        int m = t1Shape[0];
+        int inner = t1Shape[1];
+        int n = t2Shape[1];
+        float[] outData = new float[m * n];
+        if (m == 1) {
+            // Decode: a single row, so split the output columns across cores instead.
+            int chunks = Math.min(CORES, n);
+            IntStream.range(0, chunks).parallel().forEach(c -> {
+                int jStart = c * n / chunks;
+                int jEnd = (c + 1) * n / chunks;
+                for (int k = 0; k < inner; k++) {
+                    float a = t1Data[k];
+                    int rowOffset = k * n;
+                    for (int j = jStart; j < jEnd; j++) {
+                        outData[j] += a * t2Data[rowOffset + j];
+                    }
                 }
-            }
+            });
+        } else {
+            // Prefill: many rows, each computed independently on its own core.
+            IntStream.range(0, m).parallel().forEach(i -> {
+                for (int k = 0; k < inner; k++) {
+                    float a = t1Data[i * inner + k];
+                    for (int j = 0; j < n; j++) {
+                        outData[i * n + j] += a * t2Data[k * n + j];
+                    }
+                }
+            });
         }
-        return Tensor.of(outData, t1Shape[0], t2Shape[1]);
+        return Tensor.of(outData, m, n);
     }
 
     @Override

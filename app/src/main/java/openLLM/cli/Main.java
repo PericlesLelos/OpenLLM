@@ -36,7 +36,7 @@ public class Main implements Callable <Integer>{
     ) 
     List<String> prompt;
 
-    private static final int MAX_NEW_TOKENS = 30;
+    private static final int MAX_NEW_TOKENS = 300;
     @Override
     public Integer call() throws Exception {
         System.out.println("Welcome to openLLM!");

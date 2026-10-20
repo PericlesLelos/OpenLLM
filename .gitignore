@@ -12,3 +12,6 @@ models/
 
 # Ignore project binaries
 bin/
+
+# Ignore Java Flight Recorder recordings
+*.jfr
