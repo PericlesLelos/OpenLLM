@@ -22,6 +22,9 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
     implementation(libs.gson)
+
+    // Use picocli for arg parsing
+    implementation(libs.picocli)
 }
 
 // Apply a specific Java toolchain to ease working on different environments.
