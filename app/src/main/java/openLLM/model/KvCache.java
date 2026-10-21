@@ -35,6 +35,13 @@ public class KvCache {
         this.vBuffers = new float[nLayer][capacity * nEmbd];
     }
 
+    float[] getKBuffer(int layer) {
+        return kBuffers[layer];
+    }
+
+    float[] getVBuffer(int layer) {
+        return vBuffers[layer];
+    }
     void append(int layer, Tensor k, Tensor v){  
         int newRows = k.shape()[0];
         k = k.contiguous();

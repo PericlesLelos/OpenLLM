@@ -1,5 +1,7 @@
 package openllm.model;
 
+import java.util.stream.IntStream;
+
 import openllm.backend.Backend;
 import openllm.tensors.Tensor;
 
@@ -111,31 +113,41 @@ public class Gpt2Model {
         int newRows = x.shape()[0];   
         Qkv qkv = qKVProjection(x, layer);
         cache.append(layerIdx, qkv.k(), qkv.v());
-        int total = cache.getCount() + newRows;
-        Tensor kAll = cache.readK(layerIdx, total);
-        Tensor vAll = cache.readV(layerIdx, total);
+        float[] kBuffer = cache.getKBuffer(layerIdx);
+        float[] vBuffer = cache.getVBuffer(layerIdx);
+        float[] qData = qkv.q().rawData();
         int nHead = weights.config().nHead();
         int nEmbd = weights.config().nEmbd();
         int headDim = nEmbd / nHead;
         float[] attentionScores = new float[x.shape()[0] * nHead * headDim]; 
-        int[] xShape = x.shape();
         int cached = cache.getCount();
-        for (int i = 0; i < nHead; i++) {
-            Tensor qSlice = columnSlice(qkv.q(), i * headDim, headDim);
-            Tensor kSliceT = columnSlice(kAll, i * headDim, headDim).transpose(0, 1);
-            Tensor vSlice = columnSlice(vAll, i * headDim, headDim);
-            Tensor scores = backend.matmul(qSlice, kSliceT);
-            scores = backend.scale(scores, (float) (1 / Math.sqrt(headDim)));
-            Tensor maskedScores = causalMask(scores, cached);
-            Tensor softScores = backend.softmax(maskedScores);
-            Tensor fullColScores = backend.matmul(softScores, vSlice);
-            float[] fullColScoresData = fullColScores.rawData();
-            for (int j = 0; j < xShape[0]; j++) {
-                for (int k = 0; k < headDim; k++) {
-                    attentionScores[j * nEmbd + i * headDim + k] = fullColScoresData[j * headDim + k];
+        
+        final float scale = 1 / (float) Math.sqrt(headDim);
+        IntStream.range(0, nHead).parallel().forEach(h -> {
+            int headOff = h * headDim;
+            for (int i = 0; i < newRows; i++) {
+                int len = cached + i + 1;
+                float[] scores = new float[len];
+                int qRow = i * nEmbd + headOff;
+                for (int j = 0; j < len; j++) {
+                    int kRow = j * nEmbd + headOff;
+                    float sum = 0;
+                    for(int k = 0; k < headDim; k++) {
+                        sum += qData[qRow + k] * kBuffer[kRow + k];
+                    }
+                    scores[j] = sum * scale;
+                }
+                float[] probs = backend.softmax(Tensor.of(scores, len)).rawData();
+                int outRow = i * nEmbd + headOff;
+                for (int j = 0; j < len; j++) {
+                    float p = probs[j];
+                    int vRow = j * nEmbd + headOff;
+                    for (int k = 0; k < headDim; k++) {
+                        attentionScores[outRow + k] += p * vBuffer[vRow + k];
+                    }
                 }
             }
-        }
+        });
         Tensor out = backend.matmul(Tensor.of(attentionScores, x.shape()), layer.attnProjWeight());
         return backend.addBias(out, layer.attnProjBias());
     }

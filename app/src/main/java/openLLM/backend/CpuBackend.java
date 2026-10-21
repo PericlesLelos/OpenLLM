@@ -40,18 +40,25 @@ public final class CpuBackend implements Backend {
         float[] outData = new float[m * n];
         if (m == 1) {
             // Decode: a single row, so split the output columns across cores instead.
-            int chunks = Math.min(CORES, n);
-            IntStream.range(0, chunks).parallel().forEach(c -> {
-                int jStart = c * n / chunks;
-                int jEnd = (c + 1) * n / chunks;
-                for (int k = 0; k < inner; k++) {
+            int chunks = Math.min(CORES, inner);
+            float[][] partials = new float[chunks][n];
+            IntStream.range(0, chunks).parallel().forEach(i -> {
+                int kStart = i * inner / chunks;
+                int kEnd = (i + 1) * inner / chunks;
+                float[] part = partials[i];
+                for (int k = kStart; k < kEnd; k++) {
                     float a = t1Data[k];
                     int rowOffset = k * n;
-                    for (int j = jStart; j < jEnd; j++) {
-                        outData[j] += a * t2Data[rowOffset + j];
+                    for (int j = 0; j < n; j ++) {
+                        part[j] += a * t2Data[rowOffset + j]; 
                     }
                 }
             });
+            for (int c = 0; c < chunks; c++) {
+                for (int j = 0; j < n; j++) {
+                    outData[j] += partials[c][j];
+                }
+            }
         } else {
             // Prefill: many rows, each computed independently on its own core.
             IntStream.range(0, m).parallel().forEach(i -> {
