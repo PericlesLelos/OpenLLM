@@ -1,7 +1,5 @@
 package openllm.model;
 
-import java.util.Arrays;
-
 import openllm.tensors.Tensor;
 
 public class KvCache {
@@ -60,12 +58,6 @@ public class KvCache {
         } else {
             throw new IndexOutOfBoundsException("advance would exceed capacity: " + tokensStored + " stored + " + n + " new > capacity " + capacity);
         }
-    }
-    Tensor readK(int layer, int rows){
-        return Tensor.of(Arrays.copyOf(kBuffers[layer], rows * nEmbd), rows, nEmbd);
-    }
-    Tensor readV(int layer, int rows){
-        return Tensor.of(Arrays.copyOf(vBuffers[layer], rows * nEmbd), rows, nEmbd);
     }
     int getCount() {
         return this.tokensStored;

@@ -72,35 +72,6 @@ public class Gpt2Model {
         return new Qkv(q, k, v);
     }
 
-    Tensor columnSlice(Tensor x, int startingCol, int width) {
-        x = x.contiguous();
-        float[] xData = x.rawData();
-        int[] xShape = x.shape();
-        float[] outData = new float[xShape[0] * width];
-        for (int i = 0; i < xShape[0]; i++) {
-            for (int j = startingCol; j < startingCol + width; j++) {
-                outData[i * width + j - startingCol] = xData[i * xShape[1] + j];
-            }
-        }
-        
-        return Tensor.of(outData, xShape[0], width);
-    }
-    
-    Tensor causalMask(Tensor scores, int offset) {
-        float[] scoresData = scores.getData();
-        int[] scoresShape = scores.shape();
-        for (int i = 0; i < scoresShape[0]; i++) {
-            for (int j = i + offset + 1; j < scoresShape[1]; j++) {
-                scoresData[i * scoresShape[1] + j] = Float.NEGATIVE_INFINITY; 
-            }
-        }
-        return Tensor.of(scoresData, scoresShape);        
-    }
-
-    Tensor causalMask(Tensor scores) {
-        return causalMask(scores, 0);
-    }
-
     /**
      * Attention over {@code x} alone, with no earlier tokens. Runs the cached version
      * with a fresh cache sized to just these rows.
