@@ -3,6 +3,7 @@ package openllm.generate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.Consumer;
 
 import openllm.model.KvCache;
 import openllm.model.LanguageModel;
@@ -25,7 +26,7 @@ public class Generator {
         this.sampler = sampler;
     }
     
-    public String generate(String prompt, int maxNewTokens) {
+    public String generate(String prompt, int maxNewTokens, Consumer<String> onToken) {
         KvCache cache = model.newCache();
         List<Integer> ids = new ArrayList<Integer>();
         int[] input = tokenizer.encode(prompt);
@@ -39,6 +40,7 @@ public class Generator {
             } else {
                 ids.add(bestIdx);
                 input = new int[]{bestIdx};
+                onToken.accept(tokenizer.decode(new int[]{bestIdx}));
             }
         }
         return tokenizer.decode(ids.stream().mapToInt(Integer::intValue).toArray());

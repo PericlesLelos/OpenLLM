@@ -28,22 +28,22 @@ public class GeneratorTest {
 
     // Asking for zero new tokens should give the prompt back unchanged (encode then decode round trip).
     @Test void zeroNewTokensReturnsThePrompt() {
-        assertEquals("Hello world,", generator.generate("Hello world,", 0));
+        assertEquals("Hello world,", generator.generate("Hello world,", 0, text -> {}));
     }
 
     // One greedy step: the top next token after "Hello world," is " I" (id 314).
     @Test void oneNewTokenAppendsTheTopPrediction() {
-        assertEquals("Hello world, I", generator.generate("Hello world,", 1));
+        assertEquals("Hello world, I", generator.generate("Hello world,", 1, text -> {}));
     }
 
     // Greedy continuation computed with numpy from model.safetensors, one token at a time.
     // Stops at 4 tokens because the 5th choice (" what") wins by only 0.04, which float rounding could flip.
     @Test void greedyContinuationMatchesReference() {
-        assertEquals("Hello world, I'm not sure", generator.generate("Hello world,", 4));
+        assertEquals("Hello world, I'm not sure", generator.generate("Hello world,", 4, text -> {}));
     }
 
     // Greedy decoding is deterministic: the same prompt always gives the same text.
     @Test void greedyIsDeterministic() {
-        assertEquals(generator.generate("The cat", 3), generator.generate("The cat", 3));
+        assertEquals(generator.generate("The cat", 3, text -> {}), generator.generate("The cat", 3, text -> {}));
     }
 }

@@ -49,9 +49,10 @@ public class Main implements Callable <Integer>{
         Generator generator = new Generator(model, tokenizer, sampler);
 
         long start = System.nanoTime();
-        String output = generator.generate(String.join(" ", prompt), MAX_NEW_TOKENS);
+        String joinedPrompt = String.join(" ", prompt);
+        System.out.print(joinedPrompt);
+        String output = generator.generate(joinedPrompt, MAX_NEW_TOKENS, text -> System.out.print(text));
         long runtime = System.nanoTime() - start;
-        System.out.println(output);
         System.out.println("Runtime: " + runtime / 1_000_000_000.0 + "s");
         System.out.println("Tokens/Sec: " + MAX_NEW_TOKENS / (runtime / 1_000_000_000.0) + "t/s");
         return 0;
