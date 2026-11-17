@@ -5,7 +5,7 @@ import java.util.stream.IntStream;
 import openllm.backend.Backend;
 import openllm.tensors.Tensor;
 
-public class Gpt2Model {
+public class Gpt2Model implements LanguageModel{
 
     private final Gpt2Weights weights;
     private final Backend backend;
@@ -16,7 +16,12 @@ public class Gpt2Model {
         this.backend = backend;
         this.wteT = weights.wte().transpose(0, 1).contiguous();
     }
-
+    @Override 
+    public int contextLength() {
+        return weights.config().nCtx();
+    }
+    
+    @Override 
     public Backend backend() {
         return this.backend;
     }
@@ -181,6 +186,7 @@ public class Gpt2Model {
         return x;
     }
 
+    @Override 
     public Tensor nextTokenLogits(int[] ids, KvCache cache) {
         Tensor x = hidden(ids, cache);
         x = x.row(x.shape()[0] - 1).reshape(1, weights.config().nEmbd());
@@ -189,6 +195,7 @@ public class Gpt2Model {
         return x;
     }
 
+    @Override 
     public KvCache newCache() {
         return new KvCache(weights.config());
     }

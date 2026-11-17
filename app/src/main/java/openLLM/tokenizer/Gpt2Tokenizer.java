@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -30,7 +31,7 @@ import com.google.gson.JsonParser;
  * </ol>
  * Decoding reverses the byte mapping and decodes the bytes as UTF-8.
  */
-public class Gpt2Tokenizer {
+public class Gpt2Tokenizer implements Tokenizer{
     
     /** Byte value (0-255) to its stand-in character. See {@link #buildByteToChar()}. */
     private static final char[] BYTE_TO_CHAR = buildByteToChar();
@@ -48,6 +49,7 @@ public class Gpt2Tokenizer {
     private final Map<Integer, String> idToToken = new HashMap<>();
     /** Merge pair (two pieces joined by a space) to its rank; lower ranks merge first. */
     private final Map<String, Integer> mergeRanks = new HashMap<>();
+    private final int endOfTextTokenId;
 
     /**
      * Loads the vocabulary and merge rules.
@@ -69,6 +71,13 @@ public class Gpt2Tokenizer {
             if (line.isBlank()) { continue; }
             mergeRanks.put(line, i - 1);
         }
+
+        endOfTextTokenId = Objects.requireNonNull((tokenToId.get("<|endoftext|>")), "vocab has no <|endoftext|>");
+    }
+    
+    @Override
+    public int eosId() {
+        return endOfTextTokenId;
     }
 
     /**
@@ -118,6 +127,7 @@ public class Gpt2Tokenizer {
      * @return the decoded text
      * @throws IllegalArgumentException if an id is not in the vocabulary
      */
+    @Override 
     public String decode(int[] ids) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         for (int id : ids) {
@@ -209,6 +219,7 @@ public class Gpt2Tokenizer {
      * @param s the text
      * @return token ids; empty for an empty string
      */
+    @Override 
     public int[] encode(String s) {
         List<Integer> out = new ArrayList<>();
         for (String chunk : preSplit(s)) {
