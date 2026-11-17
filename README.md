@@ -5,24 +5,27 @@ A GPT-2 inference engine written from scratch in plain Java: no ML libraries, no
 OpenLLM is a learning project. The goal is an engine where every stage (tokens, embeddings, Q/K/V, attention, the residual stream, logits, the KV cache) is ordinary, readable Java you can step through in a debugger.
 
 ```
-> .\gradlew run --args="Once upon a time"
+> .\gradlew run --args="-t 0 Once upon a time"
 Welcome to openLLM!
 Model: SMALL
 
-Once upon a time, the world was a place of great beauty and great danger. The world was a place of great danger, and the world was a place of great
-Runtime: 1.36s
+Once upon a time, the world was a place of great beauty and great danger. ...
+Runtime: 5.29s
+Tokens/Sec: 56.8t/s
 ```
 
 ## Features
 
 - **Tensor library**: row-major `float[]` storage with shapes and strides, views (`reshape`, `transpose`), `contiguous()`, and `allClose` for testing.
-- **CPU backend**: `matmul` (cache-friendly i-k-j loop order), `add`, `addBias`, `scale`, GELU (tanh approximation), numerically stable `softmax`, and `layerNorm`, all behind a `Backend` interface so another backend can slot in later.
+- **CPU backend**: `matmul`, `add`, `addBias`, `scale`, GELU (tanh approximation), numerically stable `softmax`, and `layerNorm`, all behind a `Backend` interface so another backend can slot in later.
+- **Multithreaded matmul**: the prompt is split across threads by rows; each new token uses split-K, where every thread multiplies its own contiguous block of weight rows and the partial results are summed.
 - **Safetensors reader**: parses the JSON header and loads each tensor directly from the file.
 - **GPT-2 tokenizer**: byte-to-unicode mapping, GPT-2's pre-split regex, BPE merges, `encode` and `decode`.
 - **GPT-2 model**: token and position embeddings, multi-head causal self-attention, MLP, pre-norm residual blocks, final layer norm, and a tied output projection.
-- **KV cache**: the prompt is processed once (prefill), then each new token runs through the model alone and attends to cached keys and values.
-- **Greedy generation** that stops at the end-of-text token or the context limit.
-- **All four GPT-2 sizes** (small, medium, large, xl), chosen with a command-line flag.
+- **KV cache**: the prompt is processed once (prefill), then each new token runs through the model alone. Attention reads keys and values straight from the cache, one thread per head, with no copies.
+- **Sampling**: temperature and top-k, with greedy decoding when the temperature is 0 or k is 1.
+- **Command-line interface** built with picocli: model size, temperature and top-k flags, plus `--help`.
+- **All four GPT-2 sizes** (small, medium, large, xl).
 - **Tests checked against a reference**: attention, MLP, full blocks and final logits are compared with values from a NumPy implementation of GPT-2.
 
 ## Requirements
@@ -66,12 +69,26 @@ models/
 ## Usage
 
 ```powershell
-# GPT-2 small (the default)
+# GPT-2 small (the default), temperature 0.8, top-k 40
 .\gradlew run --args="Once upon a time"
 
-# Pick a size with --model=small|medium|large|xl, given before the prompt
-.\gradlew run --args="--model=medium Once upon a time"
+# Pick a size and sampling settings
+.\gradlew run --args="-m medium -t 0.7 -k 50 Once upon a time"
+
+# Greedy decoding: the same prompt always gives the same text
+.\gradlew run --args="-t 0 Once upon a time"
+
+# List every option
+.\gradlew run --args="--help"
 ```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `-m`, `--model` | `small` | `small`, `medium`, `large` or `xl` |
+| `-t`, `--temp` | `0.8` | Sampling temperature; `0` means greedy |
+| `-k`, `--top-k` | `40` | Sample only from the k most likely tokens |
+
+Options go before the prompt. Each run generates 300 tokens and prints the runtime and tokens per second.
 
 On macOS or Linux, use `./gradlew` instead.
 
@@ -85,16 +102,36 @@ The model tests need `models/gpt2-small/` in place.
 
 ## Performance
 
-Measured on a desktop CPU, single-threaded, generating 30 tokens from "Once upon a time" with GPT-2 small:
+Measured on a laptop with an AMD Ryzen 9 7940HS (8 cores, 16 threads), 32 GB of RAM, Java 25 and Windows. Generation is greedy, so every run of the same prompt produces the same text.
 
-| Step | Time |
-|---|---:|
-| First working version | ~115 s |
-| i-k-j matmul loop order, no array copies on reads | 18.9 s |
-| Compute logits for the last position only | ~12 s |
-| KV cache | **1.36 s** (~22 tokens/s) |
+### Single-threaded, 30 tokens
 
-GPT-2 medium runs at about 10 tokens/s with the same setup.
+Generating 30 tokens from "Once upon a time" with GPT-2 small:
+
+| Step | Time | Tokens/s |
+|---|---:|---:|
+| First working version | ~115 s | ~0.26 |
+| i-k-j matmul loop order, no array copies on reads | 18.9 s | 1.6 |
+| Compute logits for the last position only | ~12 s | 2.5 |
+| KV cache | 1.36 s | ~22 |
+
+### Multithreaded, 300 tokens
+
+Generating 300 tokens from "The meaning of life is" with temperature 0:
+
+| Step | Small | Medium |
+|---|---:|---:|
+| Parallel matmul (row split for the prompt, column split for each new token) | not measured | 38.0 s (7.9 tok/s) |
+| Attention reads the KV cache directly, parallel over heads | 8.7 s (34 tok/s) | 19.2 s (15.6 tok/s) |
+| Split-K matmul for each new token | **5.29 s (56.8 tok/s)** | **14.64 s (20.5 tok/s)** |
+
+Generating each new token is limited by memory bandwidth: every weight is read once per token. Medium's 1.4 GB of fp32 weights at 20.5 tok/s is about 29 GB/s.
+
+To reproduce a row:
+
+```powershell
+.\gradlew run --args="-m medium -t 0 The meaning of life is"
+```
 
 ## How it works
 
@@ -104,7 +141,7 @@ GPT-2 medium runs at about 10 tokens/s with the same setup.
    - Attention projects to Q, K and V, splits into heads, computes `softmax(QKᵀ / √64)` with a causal mask, and multiplies by V.
    - The MLP expands to 4× width, applies GELU, and projects back down.
 4. **Logits**: a final layer norm, then a multiply by `wteᵀ` (GPT-2 ties the input and output embeddings), gives one score for each of the 50,257 tokens.
-5. **Generate**: pick the highest-scoring token, append it, and repeat. Each new token's keys and values are added to the KV cache, so earlier tokens are never recomputed.
+5. **Generate**: divide the logits by the temperature, keep the top-k, apply softmax, draw a token, append it, and repeat. Each new token's keys and values are added to the KV cache, so earlier tokens are never recomputed.
 
 ## Project layout
 
@@ -115,18 +152,21 @@ app/src/main/java/openllm/
   io/         SafetensorReader, TensorInfo
   tokenizer/  Gpt2Tokenizer
   model/      Gpt2Config, GptModel, Gpt2Weights, LayerWeights, Gpt2Model, KvCache, Qkv
-  generate/   Generator
+  generate/   Generator, Sampler
   cli/        Main
 ```
 
 ## Roadmap
 
-- Sampling: temperature and top-k
-- Command-line flags for token count and sampling settings
-- Faster CPU matmul (multithreading, SIMD via the Vector API)
-- Visualizing attention patterns and the residual stream
-- Modern architectures (RoPE, RMSNorm, SwiGLU, grouped-query attention)
-- A GPU backend
+1. A model interface, so generation doesn't depend on GPT-2, plus streaming output
+2. One config-driven decoder that reads a Hugging Face `config.json`
+3. A modern model, Qwen3-0.6B (bf16, RMSNorm, RoPE, SwiGLU, grouped-query attention)
+4. A chat harness: chat templates, stop tokens, a streaming REPL, top-p sampling
+5. Speed for bigger models: Q8_0 quantization, SIMD via the Vector API, an fp16 KV cache
+6. 4B to 8B models with memory-mapped and sharded weights
+7. Tool calling and agents, with JSON-constrained decoding
+8. An OpenAI-compatible server
+9. Mixture-of-experts models and a GPU backend
 
 ## Acknowledgements
 
